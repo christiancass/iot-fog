@@ -1,9 +1,14 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
+
+
 from typing import List
 import bcrypt
 from bson.objectid import ObjectId
 
-from app.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate 
+
+from app.auth import verificar_password, crear_token, get_current_user
+from app.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate, LoginIn, TokenOut 
 from app.db import get_db
 
 
@@ -13,17 +18,21 @@ router = APIRouter()
 @router.get("/usuarios", response_model=List[UsuarioOut])
 async def obtener_usuarios():
     db = get_db()
-    if db is None:
-        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
-
     usuarios_cursor = db["usuarios"].find({})
     usuarios = []
     async for usuario in usuarios_cursor:
         usuarios.append({
             "id": str(usuario["_id"]),
-            "username": usuario["username"]
+            "username": usuario.get("username"),
+            "email": usuario.get("email"),
+            "name": usuario.get("name"),
+            "country": usuario.get("country"),
+            "city": usuario.get("city"),
+            "company": usuario.get("company"),
+            "rol": usuario.get("rol")
         })
     return usuarios
+
 
 @router.post("/usuarios")
 async def crear_usuario(usuario: UsuarioIn):
@@ -31,18 +40,37 @@ async def crear_usuario(usuario: UsuarioIn):
     if db is None:
         raise HTTPException(status_code=500, detail="Base de datos no inicializada")
 
+    # Verificar si el username ya existe
     if await db["usuarios"].find_one({"username": usuario.username}):
         raise HTTPException(status_code=400, detail="El usuario ya existe")
+
+    # Verificar si el correo ya existe
+    if await db["usuarios"].find_one({"email": usuario.email}):
+        raise HTTPException(status_code=400, detail="El correo electrónico ya está en uso")
     
     hashed_pw = bcrypt.hashpw(usuario.password.encode("utf-8"), bcrypt.gensalt())
-    
+
     nuevo_usuario = {
         "username": usuario.username,
-        "password": hashed_pw.decode("utf-8")
+        "password": hashed_pw.decode("utf-8"),
+        "email": usuario.email,
+        "name": usuario.name,
+        "country": usuario.country,
+        "city": usuario.city,
+        "company": usuario.company,
+        "rol": usuario.rol
     }
 
     await db["usuarios"].insert_one(nuevo_usuario)
-    return {"message": "Usuario creado correctamente"}
+
+    token = crear_token({
+    "           username": usuario.username,
+                "emaiil": usuario.email,
+                "rol": usuario.rol
+                })
+
+    return {"access_token": token, "token_type": "bearer"}
+
 
 @router.delete("/usuarios/{username}")
 async def eliminar_usuario(username: str):
@@ -81,3 +109,34 @@ async def actualizar_usuario(username: str, datos: UsuarioUpdate):
     )
 
     return {"message": f"Usuario '{username}' actualizado correctamente"}
+
+
+@router.post("/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    usuario = await db["usuarios"].find_one({"username": form_data.username})
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    if not bcrypt.checkpw(form_data.password.encode("utf-8"), usuario["password"].encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    # Construir datos adicionales para el token
+    token_data = {
+        "username": usuario["username"],
+        "rol": usuario.get("rol", "usuario")
+    }
+
+    token = crear_token(token_data)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@router.get("/perfil")
+async def leer_perfil(usuario: dict = Depends(get_current_user)):
+    return {
+        "message": "Perfil accedido exitosamente",
+        "usuario": usuario
+    }
