@@ -8,7 +8,7 @@ from bson.objectid import ObjectId
 
 
 from app.auth import verificar_password, crear_token, get_current_user
-from app.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate, LoginIn, TokenOut 
+from app.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate, LoginIn, TokenOut, DispositivoIn, DispositivoOut 
 from app.db import get_db
 
 
@@ -140,3 +140,27 @@ async def leer_perfil(usuario: dict = Depends(get_current_user)):
         "message": "Perfil accedido exitosamente",
         "usuario": usuario
     }
+
+
+@router.post("/dispositivos")
+async def crear_dispositivo(dispositivo: DispositivoIn, user: dict = Depends(get_current_user)):
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    existe = await db["dispositivos"].find_one({
+        "device_id": dispositivo.device_id,
+        "username": user["username"]
+    })
+
+    if existe:
+        raise HTTPException(status_code=400, detail="El dispositivo ya existe para este usuario")
+
+    nuevo_dispositivo = {
+        "device_id": dispositivo.device_id,
+        "name": dispositivo.name,
+        "username": user["username"]
+    }
+
+    await db["dispositivos"].insert_one(nuevo_dispositivo)
+    return {"message": "Dispositivo creado correctamente"}

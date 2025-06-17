@@ -33,3 +33,14 @@ class LoginIn(BaseModel):
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class DispositivoIn(BaseModel):
+    name: str
+    device_id: str
+
+class DispositivoOut(BaseModel):
+    id: str
+    device_id: str
+    name: str
+    username: str
