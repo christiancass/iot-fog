@@ -15,7 +15,7 @@ from app.db import get_db
 router = APIRouter()
 
 
-@router.get("/usuarios", response_model=List[UsuarioOut])
+@router.get("/users", response_model=List[UsuarioOut])
 async def obtener_usuarios():
     db = get_db()
     usuarios_cursor = db["usuarios"].find({})
@@ -34,7 +34,7 @@ async def obtener_usuarios():
     return usuarios
 
 
-@router.post("/usuarios")
+@router.post("/new_user")
 async def crear_usuario(usuario: UsuarioIn):
     db = get_db()
     if db is None:
@@ -72,7 +72,7 @@ async def crear_usuario(usuario: UsuarioIn):
     return {"access_token": token, "token_type": "bearer"}
 
 
-@router.delete("/usuarios/{username}")
+@router.delete("/users/{username}")
 async def eliminar_usuario(username: str):
     db = get_db()
     if db is None:
@@ -84,7 +84,7 @@ async def eliminar_usuario(username: str):
     
     return {"message": f"Usuario '{username}' eliminado correctamente"}
 
-@router.patch("/usuarios/{username}")
+@router.patch("/users/{username}")
 async def actualizar_usuario(username: str, datos: UsuarioUpdate):
     db = get_db()
     if db is None:
@@ -134,7 +134,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     return {"access_token": token, "token_type": "bearer"}
 
 
-@router.get("/perfil")
+@router.get("/profile")
 async def leer_perfil(usuario: dict = Depends(get_current_user)):
     return {
         "message": "Perfil accedido exitosamente",
@@ -142,7 +142,7 @@ async def leer_perfil(usuario: dict = Depends(get_current_user)):
     }
 
 
-@router.post("/dispositivos")
+@router.post("/new_device")
 async def crear_dispositivo(dispositivo: DispositivoIn, user: dict = Depends(get_current_user)):
     db = get_db()
     if db is None:
@@ -164,3 +164,38 @@ async def crear_dispositivo(dispositivo: DispositivoIn, user: dict = Depends(get
 
     await db["dispositivos"].insert_one(nuevo_dispositivo)
     return {"message": "Dispositivo creado correctamente"}
+
+@router.get("/devices")
+async def obtener_dispositivos(user: dict = Depends(get_current_user)):
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    devices_cursor = db["dispositivos"].find({"username": user["username"]})
+    devices = []
+    async for device in devices_cursor:
+        devices.append({
+            "id": str(device["_id"]),
+            "device_id": device.get("device_id"),
+            "name": device.get("name"),
+            "username": device.get("username")
+        })
+    return devices
+
+
+@router.delete("/devices/{device_id}")
+async def device_delete(device_id: str, user: dict = Depends(get_current_user)):
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    resultado = await db["dispositivos"].delete_one({
+        "device_id": device_id,
+        "username": user["username"]
+    })
+
+    if resultado.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+
+    return {"message": f"Dispositivo '{device_id}' eliminado correctamente"}
+
