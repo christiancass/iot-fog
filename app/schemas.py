@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Union
+from datetime import datetime 
 
 
 class UsuarioIn(BaseModel):
@@ -44,3 +45,11 @@ class DispositivoOut(BaseModel):
     device_id: str
     name: str
     username: str
+
+class VariableIn(BaseModel):
+    device_id: str
+    variable_name: str
+    unit: str
+    description:str
+    sampling_ms:str
+

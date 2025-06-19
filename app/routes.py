@@ -8,13 +8,14 @@ from bson.objectid import ObjectId
 
 
 from app.auth import verificar_password, crear_token, get_current_user
-from app.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate, LoginIn, TokenOut, DispositivoIn, DispositivoOut 
+from app.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate, LoginIn, TokenOut, DispositivoIn, DispositivoOut, VariableIn
 from app.db import get_db
 
 
 router = APIRouter()
 
 
+# Lista de usuarios creados
 @router.get("/users", response_model=List[UsuarioOut])
 async def obtener_usuarios():
     db = get_db()
@@ -33,8 +34,8 @@ async def obtener_usuarios():
         })
     return usuarios
 
-
-@router.post("/new_user")
+#creación de un usuario
+@router.post("/users")
 async def crear_usuario(usuario: UsuarioIn):
     db = get_db()
     if db is None:
@@ -71,7 +72,7 @@ async def crear_usuario(usuario: UsuarioIn):
 
     return {"access_token": token, "token_type": "bearer"}
 
-
+# eliminar un usuario
 @router.delete("/users/{username}")
 async def eliminar_usuario(username: str):
     db = get_db()
@@ -110,7 +111,7 @@ async def actualizar_usuario(username: str, datos: UsuarioUpdate):
 
     return {"message": f"Usuario '{username}' actualizado correctamente"}
 
-
+# iniciar sesion con un usuario (obtener un token)
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     db = get_db()
@@ -133,7 +134,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     token = crear_token(token_data)
     return {"access_token": token, "token_type": "bearer"}
 
-
+# consultar el usuario logeado 
 @router.get("/profile")
 async def leer_perfil(usuario: dict = Depends(get_current_user)):
     return {
@@ -142,7 +143,8 @@ async def leer_perfil(usuario: dict = Depends(get_current_user)):
     }
 
 
-@router.post("/new_device")
+# crear un usuario
+@router.post("/devices")
 async def crear_dispositivo(dispositivo: DispositivoIn, user: dict = Depends(get_current_user)):
     db = get_db()
     if db is None:
@@ -165,6 +167,7 @@ async def crear_dispositivo(dispositivo: DispositivoIn, user: dict = Depends(get
     await db["dispositivos"].insert_one(nuevo_dispositivo)
     return {"message": "Dispositivo creado correctamente"}
 
+# consultar dispositivos
 @router.get("/devices")
 async def obtener_dispositivos(user: dict = Depends(get_current_user)):
     db = get_db()
@@ -182,7 +185,7 @@ async def obtener_dispositivos(user: dict = Depends(get_current_user)):
         })
     return devices
 
-
+# borrar un dispositivo
 @router.delete("/devices/{device_id}")
 async def device_delete(device_id: str, user: dict = Depends(get_current_user)):
     db = get_db()
@@ -199,3 +202,50 @@ async def device_delete(device_id: str, user: dict = Depends(get_current_user)):
 
     return {"message": f"Dispositivo '{device_id}' eliminado correctamente"}
 
+# crear una variable
+@router.post("/variables")
+async def agregar_variable(variable: VariableIn, user: dict = Depends(get_current_user)):
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    # Validar que el dispositivo existe y pertenece al usuario autenticado
+    dispositivo = await db["dispositivos"].find_one({
+        "device_id": variable.device_id,
+        "username": user["username"]
+    })
+
+    if not dispositivo:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado o no autorizado")
+
+    nueva_variable = {
+        "device_id": variable.device_id,
+        "username": user["username"],
+        "variable_name": variable.variable_name,
+        "unit": variable.unit,
+        "description": variable.description,
+        "sampling_ms":variable.sampling_ms
+    }
+
+    await db["variables"].insert_one(nueva_variable)
+    return {"message": "Variable registrada correctamente"}
+
+@router.get("/variables")
+async def obtener_dispositivos(user: dict = Depends(get_current_user)):
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    variables_cursor = db["variables"].find({"username": user["username"]})
+    variables = []
+    async for variable in variables_cursor:
+        variables.append({
+            "id": str(variable["_id"]),
+            "device_id": variable.get("device_id"),
+            "variable_name": variable.get("variable_name"),
+            "unit": variable.get("unit"),
+            "description": variable.get("description"),
+            "sampling_ms": variable.get("sampling_ms"),
+            "username": variable.get("username")
+        })
+    return variables
