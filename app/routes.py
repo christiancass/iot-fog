@@ -4,6 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from typing import List
 import bcrypt
+import secrets
 from bson.objectid import ObjectId
 
 
@@ -143,13 +144,16 @@ async def leer_perfil(usuario: dict = Depends(get_current_user)):
     }
 
 
-# crear un usuario
-@router.post("/devices")
-async def crear_dispositivo(dispositivo: DispositivoIn, user: dict = Depends(get_current_user)):
+@router.post("/devices", response_model=DispositivoOut)
+async def crear_dispositivo(
+    dispositivo: DispositivoIn,
+    user: dict = Depends(get_current_user)
+):
     db = get_db()
     if db is None:
         raise HTTPException(status_code=500, detail="Base de datos no inicializada")
 
+    # 1. Verificar si el dispositivo ya existe para este usuario
     existe = await db["dispositivos"].find_one({
         "device_id": dispositivo.device_id,
         "username": user["username"]
@@ -158,14 +162,47 @@ async def crear_dispositivo(dispositivo: DispositivoIn, user: dict = Depends(get
     if existe:
         raise HTTPException(status_code=400, detail="El dispositivo ya existe para este usuario")
 
-    nuevo_dispositivo = {
-        "device_id": dispositivo.device_id,
-        "name": dispositivo.name,
-        "username": user["username"]
+    # 2. Generar credenciales MQTT
+    mqtt_username = f"dev_{dispositivo.device_id}"
+    raw_mqtt_password = secrets.token_urlsafe(16)
+    hashed = bcrypt.hashpw(raw_mqtt_password.encode(), bcrypt.gensalt()).decode()
+
+    # 3. Insertar usuario MQTT
+    await db["mqtt_user"].insert_one({
+        "username": mqtt_username,
+        "password": hashed
+    })
+    
+    # 3. Crear ACL para publicación y suscripción en cualquier subtopic
+    topic_acl = {
+        "username": mqtt_username,
+        "pubsub": [
+            f"iot/{user['username']}/{dispositivo.device_id}/#"
+        ]
     }
 
-    await db["dispositivos"].insert_one(nuevo_dispositivo)
-    return {"message": "Dispositivo creado correctamente"}
+    # 4. Insertar en colección ACL
+    await db["mqtt_acl"].insert_one(topic_acl)
+
+    # 4. Registrar el dispositivo
+    nuevo_dispositivo = {
+        "name": dispositivo.name,
+        "device_id": dispositivo.device_id,
+        "username": user["username"],
+        "mqtt_username": mqtt_username
+    }
+    res = await db["dispositivos"].insert_one(nuevo_dispositivo)
+
+    # 5. Preparar respuesta
+    out = DispositivoOut(
+        id=str(res.inserted_id),
+        name=dispositivo.name,
+        device_id=dispositivo.device_id,
+        username=user["username"],
+        mqtt_username=mqtt_username,
+        mqtt_password=raw_mqtt_password
+    )
+    return out
 
 # consultar dispositivos
 @router.get("/devices")

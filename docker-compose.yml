@@ -17,11 +17,13 @@ services:
     restart: always
     volumes:
       - auth-mongo-data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
     networks:
       - red-auth
+
 
   mongo-express:
     image: mongo-express
@@ -41,19 +43,56 @@ services:
       - red-auth
 
   emqx:
-    image: emqx/emqx:latest
+    image: emqx/emqx:4.4.18
     container_name: emqx
+    restart: unless-stopped
+    networks:
+      - red-auth
+
     ports:
       - "1883:1883"
       - "8083:8083"
       - "18083:18083"
+
     environment:
-      - EMQX_DASHBOARD__DEFAULT_USER__PASSWORD=admin123
+      - EMQX_NAME=emqx
+      # --- CONFIGURACIÓN GENERAL ---
+      - EMQX_ALLOW_ANONYMOUS=false
+      - EMQX_LOADED_PLUGINS=emqx_management,emqx_dashboard,emqx_auth_mongo
+      - EMQX_LOG__LEVEL=debug  # Activar logs detallados
+      # --- Habilita auth_mongo y datos de conexión ---
+      - EMQX_AUTH__MONGO__ENABLE=true
+      - EMQX_AUTH__MONGO__SERVER=auth-mongo:27017
+      - EMQX_AUTH__MONGO__USERNAME=root
+      - EMQX_AUTH__MONGO__PASSWORD=example
+      - EMQX_AUTH__MONGO__DATABASE=iot
+
+      # --- Colección de usuarios ---
+      - EMQX_AUTH__MONGO__AUTH_QUERY__COLLECTION=mqtt_user
+      - EMQX_AUTH__MONGO__AUTH_QUERY__SELECTOR=username=%u
+      - EMQX_AUTH__MONGO__AUTH_QUERY__PASSWORD_FIELD=password
+      - EMQX_AUTH__MONGO__AUTH_QUERY__PASSWORD_HASH=bcrypt
+
+      # --- Colección ACL (mqtt_acl) ---
+      - EMQX_AUTH__MONGO__ACL_QUERY=on
+      - EMQX_AUTH__MONGO__ACL_QUERY__DATABASE=iot
+      - EMQX_AUTH__MONGO__ACL_QUERY__COLLECTION=mqtt_acl
+      - EMQX_AUTH__MONGO__ACL_QUERY__SELECTOR=username=%u
+      - EMQX_AUTH__MONGO__ACL_QUERY__TOPIC_FIELD=topic
+
+      # Opcionales para desarrollo:
+      - EMQX_AUTH__MONGO__ACL_QUERY__CACHE_ENABLE=false
+      - EMQX_AUTH__MONGO__ACL_QUERY__TOPIC_FUZZY=true
+
+   
+      # acceso a dashboard
+      - EMQX_DASHBOARD__DEFAULT_USER__PASSWORD=admin123..
+    depends_on:
+      - mongo
+      - api
     volumes:
       - emqx-data:/opt/emqx/data
       - emqx-log:/opt/emqx/log
-    networks:
-      - red-auth
 
 volumes:
   auth-mongo-data:

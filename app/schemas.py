@@ -42,9 +42,14 @@ class DispositivoIn(BaseModel):
 
 class DispositivoOut(BaseModel):
     id: str
-    device_id: str
     name: str
+    device_id: str
     username: str
+    mqtt_username: str
+    mqtt_password: str
+
+class StoreFlag(BaseModel):
+    store_in_mongo: bool
 
 class VariableIn(BaseModel):
     device_id: str
@@ -52,4 +57,3 @@ class VariableIn(BaseModel):
     unit: str
     description:str
     sampling_ms:str
-
