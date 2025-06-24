@@ -8,8 +8,13 @@ services:
       - "8000:8000"
     depends_on:
       - mongo
+      - emqx
     networks:
       - red-auth
+    environment:
+      - EMQX_API_BASE=http://emqx:8081/api/v4
+      - EMQX_MANAGEMENT__DEFAULT_APPLICATION__USERNAME=admin
+      - EMQX_MANAGEMENT__DEFAULT_APPLICATION__PASSWORD=admin123..
 
   mongo:
     image: mongo:5.0
@@ -25,23 +30,6 @@ services:
       - red-auth
 
 
-  mongo-express:
-    image: mongo-express
-    container_name: mongo-express
-    restart: always
-    ports:
-      - "8081:8081"
-    environment:
-      ME_CONFIG_MONGODB_SERVER: mongo
-      ME_CONFIG_MONGODB_ADMINUSERNAME: root
-      ME_CONFIG_MONGODB_ADMINPASSWORD: example
-      ME_CONFIG_BASICAUTH_USERNAME: admin
-      ME_CONFIG_BASICAUTH_PASSWORD: admin
-    depends_on:
-      - mongo
-    networks:
-      - red-auth
-
   emqx:
     image: emqx/emqx:4.4.18
     container_name: emqx
@@ -53,6 +41,7 @@ services:
       - "1883:1883"
       - "8083:8083"
       - "18083:18083"
+      - "8081:8081"
 
     environment:
       - EMQX_NAME=emqx
@@ -84,12 +73,11 @@ services:
       - EMQX_AUTH__MONGO__ACL_QUERY__CACHE_ENABLE=false
       - EMQX_AUTH__MONGO__ACL_QUERY__TOPIC_FUZZY=true
 
-   
       # acceso a dashboard
       - EMQX_DASHBOARD__DEFAULT_USER__PASSWORD=admin123..
+      - EMQX_MANAGEMENT__DEFAULT_APPLICATION__SECRET=admin123..
     depends_on:
       - mongo
-      - api
     volumes:
       - emqx-data:/opt/emqx/data
       - emqx-log:/opt/emqx/log

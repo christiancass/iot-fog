@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Union
+from typing import Optional, Union, Any
 from datetime import datetime 
 
 
@@ -57,3 +57,8 @@ class VariableIn(BaseModel):
     unit: str
     description:str
     sampling_ms:str
+
+class MqttMessage(BaseModel):
+    topic: str
+    payload: Any
+    timestamp: datetime

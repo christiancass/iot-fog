@@ -9,3 +9,4 @@ python-multipart
 datetime
 httpx
 python-secrets
+paho-mqtt
