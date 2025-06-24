@@ -12,34 +12,15 @@ from fastapi import APIRouter, HTTPException
 # 1) Configuración EMQX Management API
 # ---------------------------------------------------
 EMQX_API_BASE = os.getenv("EMQX_API_BASE", "http://emqx:8081/api/v4")
-EMQX_APP_USER = os.getenv(
-    "EMQX_MANAGEMENT__DEFAULT_APPLICATION__USERNAME", "admin"
-)
-EMQX_APP_PASS = os.getenv(
-    "EMQX_MANAGEMENT__DEFAULT_APPLICATION__PASSWORD", "admin123.."
-)
+EMQX_APP_USER = os.getenv("EMQX_MANAGEMENT__DEFAULT_APPLICATION__USERNAME", "admin")
+EMQX_APP_PASS = os.getenv("EMQX_MANAGEMENT__DEFAULT_APPLICATION__PASSWORD", "admin123..")
 
 # ---------------------------------------------------
 # 2) Router de FastAPI
 # ---------------------------------------------------
 router = APIRouter(prefix="/emqx", tags=["emqx"])
 
-@router.get("/resources", response_model=List[Dict[str, Any]])
-async def list_emqx_resources_endpoint():
-    """
-    Endpoint GET /emqx/resources
-    Lista los recursos de EMQX.
-    """
-    try:
-        res = await emqx_get("/resources")
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"Error listando recursos EMQX: {e.response.text}"
-        )
-    items = res.get("data", [])
-    logging.info(f"[GET /emqx/resources] {len(items)} recursos encontrados")
-    return items
+
 
 # ---------------------------------------------------
 # 3) Funciones de llamada a EMQX
@@ -101,10 +82,10 @@ async def init_emqx_resources() -> None:
             "type": "web_hook",
             "config": {
                 "method": "POST",
-                "headers": [
-                    {"key": "Content-Type", "value": "application/json"},
-                    {"key": "X-API-KEY",    "value": "tu-secreto-emqx"}
-                ]
+                "headers": {
+                    "Content-Type": "application/json",
+                    "X-API-KEY": "tu-secreto-emqx"
+                    }
             }
         }
         saver_payload = {

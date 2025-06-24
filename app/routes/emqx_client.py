@@ -1,4 +1,3 @@
-# emqx_client.py
 import os
 import httpx
 
