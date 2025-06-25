@@ -7,7 +7,8 @@ from app.routes.users import router as user_router
 from app.routes.devices import router as device_router
 from app.routes.variables import router as varible_router
 from app.routes.webhook import router as webhook_router
-from app.routes.emqx_api import router as emqx_api_router, init_emqx_resources
+from app.emqx_api import router as emqx_api_router, init_emqx_resources
+
 
 
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +22,7 @@ app.include_router(device_router)
 app.include_router(varible_router)
 app.include_router(webhook_router)
 app.include_router(emqx_api_router)
+
 
 
 @app.on_event("startup")

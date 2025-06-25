@@ -48,6 +48,7 @@ class DispositivoOut(BaseModel):
     mqtt_username: str
     mqtt_password: str
 
+
 class StoreFlag(BaseModel):
     store_in_mongo: bool
 

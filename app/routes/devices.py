@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
-
+import logging
 
 from typing import List
 import bcrypt
@@ -9,6 +9,7 @@ from bson.objectid import ObjectId
 
 
 from app.routes.auth import get_current_user
+from app.emqx_api import emqx_post, saverResource
 from app.routes.schemas import DispositivoIn, DispositivoOut
 from app.db import get_db
 
@@ -45,17 +46,18 @@ async def crear_dispositivo(
     })
     
     # 3. Crear ACL para publicación y suscripción en cualquier subtopic
+    topic=f""
     topic_acl = {
         "username": mqtt_username,
         "pubsub": [
-            f"iot/{user['username']}/{dispositivo.device_id}/#"
+            f"iot/{user['username']}/{dispositivo.device_id}/+/sdata"
         ]
     }
 
     # 4. Insertar en colección ACL
     await db["mqtt_acl"].insert_one(topic_acl)
 
-    # 4. Registrar el dispositivo
+    # 5. Registrar el dispositivo
     nuevo_dispositivo = {
         "name": dispositivo.name,
         "device_id": dispositivo.device_id,
@@ -64,16 +66,55 @@ async def crear_dispositivo(
     }
     res = await db["dispositivos"].insert_one(nuevo_dispositivo)
 
-    # 5. Preparar respuesta
-    out = DispositivoOut(
+    # 6. Construir y crear la regla en EMQX
+    rawsql = (
+        f"SELECT username, payload AS payload, topic "
+        f"FROM \"iot/{user['username']}/{dispositivo.device_id}/+/sdata\""
+    )
+    new_rule = {
+        "rawsql": rawsql,
+        "actions": [
+            {
+                "name": "data_to_webserver",
+                "params": {
+                    "$resource": saverResource.get("id"),
+                    "payload_tmpl": (
+                        '{"username":"'+user["username"]+'",'
+                        '"payload":${payload},"topic":"${topic}"}'
+                    )
+                }
+            }
+        ],
+        "description": f"SAVER-RULE {user['username']}/{dispositivo.device_id}",
+        "enabled": True
+    }
+
+    try:
+        rule_resp = await emqx_post("/rules", new_rule)
+    except Exception as e:
+        # Si la creación de la regla falla, opcionalmente podrías
+        # hacer rollback del insert del dispositivo o notificar
+        logging.error(f"No se pudo crear la regla EMQX: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="Dispositivo creado, pero fallo la creación de la regla en EMQX"
+        )
+
+    # … después de insertar el dispositivo …
+
+    logging.info(f">>> saverResource = {saverResource!r}")
+
+
+    # 7) Devolver respuesta, incluyendo el ID de la regla
+    return DispositivoOut(
         id=str(res.inserted_id),
         name=dispositivo.name,
         device_id=dispositivo.device_id,
         username=user["username"],
         mqtt_username=mqtt_username,
-        mqtt_password=raw_mqtt_password
+        mqtt_password=raw_mqtt_password,
+
     )
-    return out
 
 # consultar dispositivos
 @router.get("/devices")
