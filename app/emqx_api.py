@@ -43,6 +43,8 @@ async def emqx_post(path: str, payload: dict) -> Any:
 saverResource: Dict[str, Any] = {}
 alarmResource: Dict[str, Any] = {}
 
+async def get_resource():
+    return saverResource, alarmResource
 # ---------------------------------------------------
 # Init mejorado
 # ---------------------------------------------------
@@ -103,7 +105,3 @@ async def init_emqx_resources() -> None:
         }
         alarmResource = (await emqx_post("/resources", payload))["data"]
         logging.info(f"  • Nuevo alarmResource id={alarmResource.get('id')}")
-
-    # 6) Log final de confirmación
-    logging.info(f"[startup] saverResource = {saverResource!r}")
-    logging.info(f"[startup] alarmResource = {alarmResource!r}")

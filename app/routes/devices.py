@@ -9,7 +9,7 @@ from bson.objectid import ObjectId
 
 
 from app.routes.auth import get_current_user
-from app.emqx_api import emqx_post, saverResource
+from app.emqx_api import emqx_post, get_resource
 from app.routes.schemas import DispositivoIn, DispositivoOut
 from app.db import get_db
 
@@ -65,6 +65,9 @@ async def crear_dispositivo(
         "mqtt_username": mqtt_username
     }
     res = await db["dispositivos"].insert_one(nuevo_dispositivo)
+
+    saverResource, alarmResource = await get_resource()
+
 
     # 6. Construir y crear la regla en EMQX
     rawsql = (
