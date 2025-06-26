@@ -9,13 +9,13 @@ from bson.objectid import ObjectId
 
 
 from app.routes.auth import get_current_user
-from app.emqx_api import emqx_post, get_resource
+from app.emqx_api import emqx_post, get_resource, emqx_get, emqx_delete
 from app.routes.schemas import DispositivoIn, DispositivoOut
 from app.db import get_db
 
 
 router = APIRouter()
-
+#crear dispositivo
 @router.post("/devices", response_model=DispositivoOut)
 async def crear_dispositivo(
     dispositivo: DispositivoIn,
@@ -94,6 +94,11 @@ async def crear_dispositivo(
 
     try:
         rule_resp = await emqx_post("/rules", new_rule)
+        rule_id = rule_resp["data"]["id"]
+        await db["dispositivos"].update_one(
+            {"_id": res.inserted_id},
+            {"$set": {"emqx_rule_id": rule_id}}
+)
     except Exception as e:
         # Si la creación de la regla falla, opcionalmente podrías
         # hacer rollback del insert del dispositivo o notificar
@@ -102,6 +107,7 @@ async def crear_dispositivo(
             status_code=502,
             detail="Dispositivo creado, pero fallo la creación de la regla en EMQX"
         )
+    
 
     # … después de insertar el dispositivo …
 
@@ -142,14 +148,26 @@ async def obtener_dispositivos(user: dict = Depends(get_current_user)):
 async def device_delete(device_id: str, user: dict = Depends(get_current_user)):
     db = get_db()
     if db is None:
-        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+        raise HTTPException(500, "Base de datos no inicializada")
 
-    resultado = await db["dispositivos"].delete_one({
+    #Busca el dispositivo (antes de borrarlo) para obtener emqx_rule_id
+    dispositivo = await db["dispositivos"].find_one({
         "device_id": device_id,
         "username": user["username"]
     })
+    if not dispositivo:
+        raise HTTPException(404, "Dispositivo no encontrado")
 
-    if resultado.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+    rule_id = dispositivo.get("emqx_rule_id")
+    if rule_id:
+        try:
+            await emqx_delete(f"/rules/{rule_id}")
+            logging.info(f"✅ Regla EMQX {rule_id} eliminada")
+        except Exception as e:
+            logging.error(f"Error eliminando regla EMQX {rule_id}: {e!r}")
 
-    return {"message": f"Dispositivo '{device_id}' eliminado correctamente"}
+    # Borra el documento Mongo
+    await db["dispositivos"].delete_one({"_id": dispositivo["_id"]})
+
+    return {"message": f"Dispositivo '{device_id}' y regla asociada eliminados correctamente"}
+

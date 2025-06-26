@@ -37,6 +37,12 @@ async def emqx_post(path: str, payload: dict) -> Any:
         r.raise_for_status()
         return r.json()
 
+async def emqx_delete(path: str) -> Any:
+    url = f"{EMQX_API_BASE}{path}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.delete(url, auth=(EMQX_APP_USER, EMQX_APP_PASS))
+        resp.raise_for_status()
+        return resp.json()
 # ---------------------------------------------------
 # Variables globales
 # ---------------------------------------------------
@@ -45,34 +51,36 @@ alarmResource: Dict[str, Any] = {}
 
 async def get_resource():
     return saverResource, alarmResource
+
 # ---------------------------------------------------
-# Init mejorado
+# INIT creacion de recursos
 # ---------------------------------------------------
+
 async def init_emqx_resources() -> None:
     global saverResource, alarmResource
 
-    # espera un poco a que EMQX arranque
+    logging.info("[startup] Esperando a que EMQX arranque…")
     await asyncio.sleep(10)
 
-    # 1) Leer recursos existentes
+    # 1) Leer todos los recursos
     try:
-        res = await emqx_get("/resources")
+        resp  = await emqx_get("/resources?limit=100")
+        items = resp.get("data", [])
     except Exception as e:
         logging.error(f"[startup] No se pudo conectar a EMQX: {e!r}")
         return
 
-    items: List[Dict[str, Any]] = res.get("data", [])
-    logging.info(f"[startup] EMQX devolvió recursos: {[r.get('name') for r in items]}")
+    logging.info(f"[startup] EMQX devolvió {len(items)} recursos")
 
-    # 2) Buscar saver-webhook y alarms-webhook
+    # 2) Detectar por URL
     for r in items:
-        name = r.get("name", "")
-        if name == "saver-webhook":
+        cfg = r.get("config", {}) or {}
+        url = cfg.get("url", "")
+        if url.endswith("/saver-webhook"):
             saverResource = r
-        elif name == "alarms-webhook":
+        elif url.endswith("/alarms-webhook"):
             alarmResource = r
 
-    # 3) Config base para crear webhooks
     base_cfg = {
         "type": "web_hook",
         "config": {
@@ -84,24 +92,35 @@ async def init_emqx_resources() -> None:
         }
     }
 
-    # 4) Crea saver-webhook si falta
+    # 3) Crear saver-webhook si no existe
     if not saverResource:
-        logging.info("[startup] Creando saver-webhook")
+        logging.info("[startup] Creando saver-webhook...")
         payload = {
             **base_cfg,
             "name": "saver-webhook",
+            "description": "saver-webhook",
             "config": {**base_cfg["config"], "url": "http://api:8000/saver-webhook"}
         }
         saverResource = (await emqx_post("/resources", payload))["data"]
-        logging.info(f"  • Nuevo saverResource id={saverResource.get('id')}")
+        logging.info(f"[startup] saverResource creado: {saverResource.get('id')}")
+    else:
+        logging.info(f"[startup] saverResource cargado: {saverResource.get('id')}")
 
-    # 5) Crea alarms-webhook si falta
+    # 4) Crear alarms-webhook si no existe
     if not alarmResource:
-        logging.info("[startup] Creando alarms-webhook")
+        logging.info("[startup] Creando alarms-webhook...")
         payload = {
             **base_cfg,
             "name": "alarms-webhook",
+            "description": "alarms-webhook",
             "config": {**base_cfg["config"], "url": "http://api:8000/alarms-webhook"}
         }
         alarmResource = (await emqx_post("/resources", payload))["data"]
-        logging.info(f"  • Nuevo alarmResource id={alarmResource.get('id')}")
+        logging.info(f"[startup] alarmResource creado: {alarmResource.get('id')}")
+    else:
+        logging.info(f"[startup] alarmResource cargado: {alarmResource.get('id')}")
+
+    logging.info(
+        f"[startup] Recursos finales — saver: {saverResource.get('id')}, "
+        f"alarms: {alarmResource.get('id')}"
+    )
