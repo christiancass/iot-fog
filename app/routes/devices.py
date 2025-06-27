@@ -70,7 +70,7 @@ async def crear_dispositivo(
 
     # 6. Construir y crear la regla en EMQX
     rawsql = (
-        f"SELECT username, payload AS payload, topic "
+        f"SELECT  payload AS payload, topic "
         f"FROM \"iot/{user['username']}/{dispositivo.device_id}/+/sdata\" WHERE payload.save=1"
     )
     new_rule = {

@@ -129,6 +129,8 @@ async def init_emqx_resources() -> None:
 # ---------------------------------------------------
 # INIT creacion de alarmas (regla)
 # ---------------------------------------------------
+
+
 async def crear_regla_alarma(
     username: str,
     device_id: str,
