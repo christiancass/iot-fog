@@ -1,8 +1,9 @@
 # app/emqx_api.py
 
 import os, logging, asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import httpx
+
 
 # ---------------------------------------------------
 # Configuración EMQX Management API
@@ -124,3 +125,64 @@ async def init_emqx_resources() -> None:
         f"[startup] Recursos finales — saver: {saverResource.get('id')}, "
         f"alarms: {alarmResource.get('id')}"
     )
+
+# ---------------------------------------------------
+# INIT creacion de alarmas (regla)
+# ---------------------------------------------------
+async def crear_regla_alarma(
+    username: str,
+    device_id: str,
+    variable_id: str,
+    field: str,
+    operator: str,
+    threshold: float
+) -> str:
+    """
+    Crea y devuelve el ID de una regla de alarma instantánea en EMQX para:
+      iot/{username}/{device_id}/{variable_id}/sdata
+    Dispara en el primer evento que cumpla payload.{field} {operator} {threshold}.
+    """
+    valid_ops = {">", "<", ">=", "<=", "=", "!="}
+    if operator not in valid_ops:
+        raise ValueError(f"Operador inválido: {operator!r}. Debe estar en {valid_ops}")
+
+    topic = f"iot/{username}/{device_id}/{variable_id}/sdata"
+    condition = f"payload.{field} {operator} {threshold}"
+
+    rawsql = (
+        f"SELECT payload.{field} AS {field}, topic "
+        f"FROM \"{topic}\" "
+        f"WHERE {condition}"
+    )
+
+    new_rule = {
+        "rawsql": rawsql,
+        "actions": [
+            {
+                "name": "data_to_webserver",
+                "params": {
+                    "$resource": alarmResource.get("id"),
+                    "payload_tmpl": (
+                        f'{{"device":"{device_id}",'
+                        f'"variable":"{variable_id}",'
+                        f'"{field}":${{{field}}},"topic":"${{topic}}"}}'
+                    )
+                }
+            }
+        ],
+        "description": f"ALARM {username}/{device_id}/{variable_id}/{field}{operator}{threshold}",
+        "enabled": True
+    }
+
+    logging.info("Creando regla instantánea con SQL:\n%s", rawsql)
+    resp = await emqx_post("/rules", new_rule)
+    logging.info("EMQX POST /rules response: %r", resp)
+
+    data = resp.get("data") or resp
+    rule_id = data.get("id")
+    if not rule_id:
+        raise RuntimeError(f"Respuesta inesperada de EMQX: {resp!r}")
+
+    logging.info("Regla de alarma creada con ID %s", rule_id)
+    return rule_id
+

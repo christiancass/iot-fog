@@ -8,6 +8,7 @@ from app.routes.devices import router as device_router
 from app.routes.variables import router as varible_router
 from app.routes.webhook import router as webhook_router
 from app.emqx_api import router as emqx_api_router, init_emqx_resources
+from app.routes.alarms import router as alarms_router
 
 
 
@@ -22,6 +23,7 @@ app.include_router(device_router)
 app.include_router(varible_router)
 app.include_router(webhook_router)
 app.include_router(emqx_api_router)
+app.include_router(alarms_router)
 
 
 

@@ -1,15 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, HTTPException, Depends
 
 
-from typing import List
-import bcrypt
-import secrets
-from bson.objectid import ObjectId
 
 
-from app.routes.auth import verificar_password, crear_token, get_current_user
-from app.routes.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate, LoginIn, TokenOut, DispositivoIn, DispositivoOut, VariableIn
+from app.routes.auth import get_current_user
+from app.routes.schemas import  VariableIn
 from app.db import get_db
 
 

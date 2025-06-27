@@ -46,7 +46,6 @@ async def crear_dispositivo(
     })
     
     # 3. Crear ACL para publicación y suscripción en cualquier subtopic
-    topic=f""
     topic_acl = {
         "username": mqtt_username,
         "pubsub": [
@@ -72,7 +71,7 @@ async def crear_dispositivo(
     # 6. Construir y crear la regla en EMQX
     rawsql = (
         f"SELECT username, payload AS payload, topic "
-        f"FROM \"iot/{user['username']}/{dispositivo.device_id}/+/sdata\""
+        f"FROM \"iot/{user['username']}/{dispositivo.device_id}/+/sdata\" WHERE payload.save=1"
     )
     new_rule = {
         "rawsql": rawsql,
@@ -162,7 +161,7 @@ async def device_delete(device_id: str, user: dict = Depends(get_current_user)):
     if rule_id:
         try:
             await emqx_delete(f"/rules/{rule_id}")
-            logging.info(f"✅ Regla EMQX {rule_id} eliminada")
+            logging.info(f"Regla EMQX {rule_id} eliminada")
         except Exception as e:
             logging.error(f"Error eliminando regla EMQX {rule_id}: {e!r}")
 
