@@ -10,7 +10,7 @@ from bson.objectid import ObjectId
 
 from app.routes.auth import verificar_password, crear_token, get_current_user
 from app.routes.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate, LoginIn, TokenOut, DispositivoIn, DispositivoOut, VariableIn
-from app.db import get_db
+from app.utils.db import get_db
 
 
 router = APIRouter()

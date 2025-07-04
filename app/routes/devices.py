@@ -9,9 +9,9 @@ from bson.objectid import ObjectId
 
 
 from app.routes.auth import get_current_user
-from app.emqx_api import emqx_post, get_resource, emqx_get, emqx_delete
+from app.utils.emqx_api import emqx_post, get_resource, emqx_get, emqx_delete
 from app.routes.schemas import DispositivoIn, DispositivoOut
-from app.db import get_db
+from app.utils.db import get_db
 
 
 router = APIRouter()

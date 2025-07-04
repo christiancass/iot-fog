@@ -9,12 +9,17 @@ services:
     depends_on:
       - mongo
       - emqx
+      - influxdb
     networks:
       - red-auth
     environment:
       - EMQX_API_BASE=http://emqx:8081/api/v4
       - EMQX_MANAGEMENT__DEFAULT_APPLICATION__USERNAME=admin
       - EMQX_MANAGEMENT__DEFAULT_APPLICATION__PASSWORD=admin123..
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=admin123                             
+      - INFLUX_ORG=my-org
+      - INFLUX_BUCKET=measurements
 
   mongo:
     image: mongo:5.0
@@ -22,7 +27,6 @@ services:
     restart: always
     volumes:
       - auth-mongo-data:/data/db
-      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
@@ -46,8 +50,6 @@ services:
       - mongo
     networks:
       - red-auth
-
-
 
   emqx:
     image: emqx/emqx:4.4.18
@@ -101,10 +103,51 @@ services:
       - emqx-data:/opt/emqx/data
       - emqx-log:/opt/emqx/log
 
+  influxdb:
+    image: influxdb:2.6
+    container_name: influxdb
+
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123
+      - DOCKER_INFLUXDB_INIT_ORG=my-org
+      - DOCKER_INFLUXDB_INIT_BUCKET=measurements
+      - DOCKER_INFLUXDB_INIT_RETENTION=7d
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=admin123
+    networks:
+      - red-auth
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+  grafana:
+    image: grafana/grafana-oss
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=grafana
+      - GF_SECURITY_ADMIN_PASSWORD=grafana123
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_BASIC_ENABLED=true
+    networks:
+      - red-auth
+    ports:
+      - "3000:3000"
+    depends_on:
+      - influxdb
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+
 volumes:
   auth-mongo-data:
   emqx-data:
   emqx-log:
+  influxdb-data:
+  grafana-storage:
 
 networks:
   red-auth:
+
+
