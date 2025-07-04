@@ -10,3 +10,4 @@ datetime
 httpx
 python-secrets
 paho-mqtt
+aiohttp

@@ -3,7 +3,8 @@ from fastapi import APIRouter, Request, HTTPException
 import logging, json
 from datetime import datetime
 
-from app.db import get_db
+from app.utils.db import get_db
+from app.utils.influx_api import write_to_influx
 
 router = APIRouter()
 
@@ -62,6 +63,22 @@ async def saver_webhook(req: Request):
     except Exception as e:
         logging.error("Error insertando dato en MongoDB: %r", e)
         raise HTTPException(status_code=500, detail="Error guardando ")
+    
+    try:
+        await write_to_influx(
+            measurement="iot_data",
+            tags={
+                "username": username,
+                "device_id": device_id,
+                "variable_id": variable_id
+            },
+            fields={
+                "value": value
+            },
+            timestamp=datetime.utcnow()
+        )
+    except Exception as e:
+        logging.error("Error escribiendo en InfluxDB: %r", e)
 
     return {}
 #----------------------------------------------------------------------------------

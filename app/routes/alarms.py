@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends
 import logging
 
 from app.routes.auth import get_current_user
-from app.db import get_db
+from app.utils.db import get_db
 from app.routes.schemas import AlarmRuleIn, AlarmRuleOut
-from app.emqx_api import crear_regla_alarma
+from app.utils.emqx_api import crear_regla_alarma
 
 router = APIRouter(prefix="/alarms", tags=["alarms"])
 
