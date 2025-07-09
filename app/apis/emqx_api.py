@@ -4,7 +4,7 @@ import os, logging, asyncio
 from typing import Any, Dict, List, Optional
 import httpx
 
-
+from app.utils.db import get_db
 # ---------------------------------------------------
 # Configuración EMQX Management API
 # ---------------------------------------------------
@@ -125,12 +125,9 @@ async def init_emqx_resources() -> None:
         f"[startup] Recursos finales — saver: {saverResource.get('id')}, "
         f"alarms: {alarmResource.get('id')}"
     )
-
 # ---------------------------------------------------
 # INIT creacion de alarmas (regla)
 # ---------------------------------------------------
-
-
 async def crear_regla_alarma(
     username: str,
     device_id: str,

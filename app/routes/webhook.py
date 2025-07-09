@@ -4,7 +4,7 @@ import logging, json
 from datetime import datetime
 
 from app.utils.db import get_db
-from app.utils.influx_api import write_to_influx
+from app.apis.influx_api import write_to_influx
 
 router = APIRouter()
 

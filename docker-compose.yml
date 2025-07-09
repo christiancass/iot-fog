@@ -99,9 +99,7 @@ services:
       - EMQX_MANAGEMENT__DEFAULT_APPLICATION__SECRET=admin123..
     depends_on:
       - mongo
-    volumes:
-      - emqx-data:/opt/emqx/data
-      - emqx-log:/opt/emqx/log
+
 
   influxdb:
     image: influxdb:2.6
@@ -110,7 +108,7 @@ services:
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123..
       - DOCKER_INFLUXDB_INIT_ORG=my-org
       - DOCKER_INFLUXDB_INIT_BUCKET=measurements
       - DOCKER_INFLUXDB_INIT_RETENTION=7d
@@ -126,10 +124,13 @@ services:
     image: grafana/grafana-oss
     container_name: grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=grafana
+      - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=grafana123
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_AUTH_BASIC_ENABLED=true
+      - GRAFANA_TOKEN=
+      - GRAFANA_URL=${GRAFANA_URL}
+
     networks:
       - red-auth
     ports:
@@ -142,8 +143,6 @@ services:
 
 volumes:
   auth-mongo-data:
-  emqx-data:
-  emqx-log:
   influxdb-data:
   grafana-storage:
 

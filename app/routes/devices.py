@@ -9,8 +9,8 @@ from bson.objectid import ObjectId
 
 
 from app.routes.auth import get_current_user
-from app.utils.emqx_api import emqx_post, get_resource, emqx_get, emqx_delete
-from app.routes.schemas import DispositivoIn, DispositivoOut
+from app.apis.emqx_api import emqx_post, get_resource, emqx_get, emqx_delete
+from app.models.schemas import DispositivoIn, DispositivoOut
 from app.utils.db import get_db
 
 
@@ -97,7 +97,22 @@ async def crear_dispositivo(
         await db["dispositivos"].update_one(
             {"_id": res.inserted_id},
             {"$set": {"emqx_rule_id": rule_id}}
-)
+        )
+        await db["emqx_save_rules"].insert_one({
+            "rule_id": rule_id,
+            "type": "save-rule",
+            "username": user["username"],
+            "device_id": dispositivo.device_id,
+            "rawsql": rawsql,
+            "description": new_rule["description"],
+            "payload_tmpl": (
+                        '{"username":"'+user["username"]+'",'
+                        '"payload":${payload},"topic":"${topic}"}'
+                    ),
+            "enabled": True,
+        })
+        
+
     except Exception as e:
         # Si la creación de la regla falla, opcionalmente podrías
         # hacer rollback del insert del dispositivo o notificar
@@ -142,14 +157,14 @@ async def obtener_dispositivos(user: dict = Depends(get_current_user)):
         })
     return devices
 
-# borrar un dispositivo
+
 @router.delete("/devices/{device_id}")
 async def device_delete(device_id: str, user: dict = Depends(get_current_user)):
     db = get_db()
     if db is None:
         raise HTTPException(500, "Base de datos no inicializada")
 
-    #Busca el dispositivo (antes de borrarlo) para obtener emqx_rule_id
+    # 1. Buscar el dispositivo
     dispositivo = await db["dispositivos"].find_one({
         "device_id": device_id,
         "username": user["username"]
@@ -157,16 +172,59 @@ async def device_delete(device_id: str, user: dict = Depends(get_current_user)):
     if not dispositivo:
         raise HTTPException(404, "Dispositivo no encontrado")
 
-    rule_id = dispositivo.get("emqx_rule_id")
-    if rule_id:
-        try:
-            await emqx_delete(f"/rules/{rule_id}")
-            logging.info(f"Regla EMQX {rule_id} eliminada")
-        except Exception as e:
-            logging.error(f"Error eliminando regla EMQX {rule_id}: {e!r}")
+    # ✅ 2. Eliminar reglas SAVE en EMQX antes de borrarlas de Mongo
+    async for rule in db["emqx_save_rules"].find({
+        "device_id": device_id,
+        "username": user["username"]
+    }):
+        rule_id = rule.get("rule_id")
+        if rule_id:
+            try:
+                await emqx_delete(f"/rules/{rule_id}")
+                logging.info(f"[delete] Regla save-rule EMQX {rule_id} eliminada")
+            except Exception as e:
+                logging.warning(f"[delete] Error eliminando save-rule EMQX {rule_id}: {e!r}")
 
-    # Borra el documento Mongo
+    # ✅ 3. Eliminar reglas de ALARMAS en EMQX antes de borrarlas de Mongo
+    async for alarma in db["alarmas"].find({
+        "device_id": device_id,
+        "username": user["username"]
+    }):
+        rule_id = alarma.get("rule_id")
+        if rule_id:
+            try:
+                await emqx_delete(f"/rules/{rule_id}")
+                logging.info(f"[delete] Regla de alarma EMQX {rule_id} eliminada")
+            except Exception as e:
+                logging.warning(f"[delete] Error eliminando regla de alarma EMQX {rule_id}: {e!r}")
+
+    # 4. Eliminar save-rules en Mongo
+    await db["emqx_save_rules"].delete_many({
+        "device_id": device_id,
+        "username": user["username"]
+    })
+
+    # 5. Eliminar alarmas en Mongo
+    await db["alarmas"].delete_many({
+        "device_id": device_id,
+        "username": user["username"]
+    })
+
+    # 6. Eliminar variables
+    await db["variables"].delete_many({
+        "device_id": device_id,
+        "username": user["username"]
+    })
+
+    # 7. Eliminar usuario MQTT y ACL
+    mqtt_username = dispositivo.get("mqtt_username")
+    if mqtt_username:
+        await db["mqtt_user"].delete_many({"username": mqtt_username})
+        await db["mqtt_acl"].delete_many({"username": mqtt_username})
+        logging.info(f"[delete] MQTT user y ACL eliminados para {mqtt_username}")
+
+    # 8. Eliminar el dispositivo
     await db["dispositivos"].delete_one({"_id": dispositivo["_id"]})
+    logging.info(f"[delete] Dispositivo '{device_id}' eliminado")
 
-    return {"message": f"Dispositivo '{device_id}' y regla asociada eliminados correctamente"}
-
+    return {"message": f"Dispositivo '{device_id}' y todos sus recursos fueron eliminados correctamente"}

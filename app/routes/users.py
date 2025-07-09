@@ -1,38 +1,38 @@
-from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, HTTPException, Depends
 
 
 from typing import List
 import bcrypt
-import secrets
-from bson.objectid import ObjectId
 
 
-from app.routes.auth import verificar_password, crear_token, get_current_user
-from app.routes.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate, LoginIn, TokenOut, DispositivoIn, DispositivoOut, VariableIn
+from app.models.schemas import UsuarioOut,UsuarioIn, UsuarioUpdate
 from app.utils.db import get_db
-
+from app.routes.auth import get_current_user
 
 router = APIRouter()
 
-# Lista de usuarios creados
-@router.get("/users", response_model=List[UsuarioOut])
-async def obtener_usuarios():
+# Obtener solo la información del usuario autenticado
+@router.get("/users", response_model=UsuarioOut)
+async def obtener_usuario_actual(user: dict = Depends(get_current_user)):
     db = get_db()
-    usuarios_cursor = db["usuarios"].find({})
-    usuarios = []
-    async for usuario in usuarios_cursor:
-        usuarios.append({
-            "id": str(usuario["_id"]),
-            "username": usuario.get("username"),
-            "email": usuario.get("email"),
-            "name": usuario.get("name"),
-            "country": usuario.get("country"),
-            "city": usuario.get("city"),
-            "company": usuario.get("company"),
-            "rol": usuario.get("rol")
-        })
-    return usuarios
+    if db is None:
+        raise HTTPException(500, "Base de datos no inicializada")
+
+    usuario = await db["usuarios"].find_one({"username": user["username"]})
+    if not usuario:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    return {
+        "id": str(usuario["_id"]),
+        "username": usuario.get("username"),
+        "email": usuario.get("email"),
+        "name": usuario.get("name"),
+        "country": usuario.get("country"),
+        "city": usuario.get("city"),
+        "company": usuario.get("company"),
+        "rol": usuario.get("rol")
+    }
+
 
 #creación de un usuario
 @router.post("/users")
@@ -63,21 +63,18 @@ async def crear_usuario(usuario: UsuarioIn):
     }
 
     await db["usuarios"].insert_one(nuevo_usuario)
+    return {"Usuario creado con exito"}
 
-    token = crear_token({
-    "           username": usuario.username,
-                "emaiil": usuario.email,
-                "rol": usuario.rol
-                })
-
-    return {"access_token": token, "token_type": "bearer"}
-
-# eliminar un usuario
+# Eliminar un usuario (solo si está autenticado)
 @router.delete("/users/{username}")
-async def eliminar_usuario(username: str):
+async def eliminar_usuario(username: str, user: dict = Depends(get_current_user)):
     db = get_db()
     if db is None:
         raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    # (Opcional) Validar que el usuario autenticado solo pueda eliminar su propio usuario
+    if username != user["username"]:
+        raise HTTPException(status_code=403, detail="No tienes permiso para eliminar este usuario")
 
     resultado = await db["usuarios"].delete_one({"username": username})
     if resultado.deleted_count == 0:
@@ -85,12 +82,21 @@ async def eliminar_usuario(username: str):
     
     return {"message": f"Usuario '{username}' eliminado correctamente"}
 
-# actualizar datos de un usuario
+
+# Actualizar datos de un usuario (solo si está autenticado)
 @router.patch("/users/{username}")
-async def actualizar_usuario(username: str, datos: UsuarioUpdate):
+async def actualizar_usuario(
+    username: str,
+    datos: UsuarioUpdate,
+    user: dict = Depends(get_current_user)
+):
     db = get_db()
     if db is None:
         raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    # Validar que el usuario autenticado solo pueda actualizar su propia cuenta
+    if username != user["username"]:
+        raise HTTPException(status_code=403, detail="No tienes permiso para modificar este usuario")
 
     usuario = await db["usuarios"].find_one({"username": username})
     if not usuario:
