@@ -44,3 +44,6 @@ async def wait_grafana(timeout: int = 60):
             logging.warning(f"Grafana aún no responde: {e}")
         await asyncio.sleep(1)
     raise TimeoutError("Timeout esperando a Grafana.")
+
+
+

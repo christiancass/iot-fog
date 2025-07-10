@@ -1,6 +1,5 @@
-import os
 from fastapi import FastAPI
-import logging
+import logging, os, asyncio
 
 from app.utils.services_ready import wait_grafana, wait_influx
 from app.utils.db import connect_to_mongo, close_mongo_connection
@@ -36,22 +35,19 @@ app.include_router(alarms_router)
 # Eventos de arranque
 @app.on_event("startup")
 async def startup_event():
-
     await connect_to_mongo()
     await init_emqx_resources()
-
-
+    await cargar_alarm_rules_desde_mongo()
+    await cargar_save_rules_desde_mongo()
     # Esperar InfluxDB
     influx_url = os.getenv("INFLUX_URL", "http://influxdb:8086")
     await wait_influx(influx_url)
-
     # Crear token Influx y guardar en entorno
     influx_token = await crear_token_influx()
     os.environ["INFLUX_AUTH_TOKEN"] = influx_token
     logging.info("[Startup] Token de InfluxDB guardado en entorno")
 
-    await cargar_alarm_rules_desde_mongo()
-    await cargar_save_rules_desde_mongo()
+
 
 # Eventos de cierre
 @app.on_event("shutdown")
