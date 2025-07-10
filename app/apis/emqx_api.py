@@ -61,16 +61,19 @@ async def init_emqx_resources() -> None:
     global saverResource, alarmResource
 
     logging.info("[startup] Esperando a que EMQX arranque…")
-    await asyncio.sleep(20)
+    #await asyncio.sleep(20)
 
-    # 1) Leer todos los recursos
-    try:
-        resp  = await emqx_get("/resources?limit=100")
-        items = resp.get("data", [])
-    except Exception as e:
-        logging.error(f"[startup] No se pudo conectar a EMQX: {e!r}")
-        return
-
+    
+    # 1) Leer todos los recursos existentes
+    while (True):
+        try:
+            resp  = await emqx_get("/resources?limit=100")
+            items = resp.get("data", [])
+            break
+        except Exception as e:
+            logging.error(f"[startup] No se pudo conectar a EMQX: {e!r}, reintentando en 5 segundos")
+            await asyncio.sleep(5)
+    
     logging.info(f"[startup] EMQX devolvió {len(items)} recursos")
 
     # 2) Detectar por URL
@@ -89,7 +92,9 @@ async def init_emqx_resources() -> None:
             "headers": {
                 "Content-Type": "application/json",
                 "X-API-KEY": "tu-secreto-emqx"
-            }
+            },
+            "connect_timeout": "20s",
+            "request_timeout": "20s"
         }
     }
 
@@ -125,6 +130,7 @@ async def init_emqx_resources() -> None:
         f"[startup] Recursos finales — saver: {saverResource.get('id')}, "
         f"alarms: {alarmResource.get('id')}"
     )
+
 # ---------------------------------------------------
 # INIT creacion de alarmas (regla)
 # ---------------------------------------------------

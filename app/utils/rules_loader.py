@@ -1,6 +1,7 @@
 import logging
 from app.utils.db import get_db
-from app.apis.emqx_api import emqx_post, get_resource
+from app.apis.emqx_api import emqx_post, get_resource, emqx_get
+import asyncio
 
 
 async def cargar_save_rules_desde_mongo():
@@ -11,7 +12,7 @@ async def cargar_save_rules_desde_mongo():
         logging.warning("[startup] No se pudo obtener la conexión a MongoDB")
         return
 
-    saverResource, _ = await get_resource()
+    saverResource, _ = await get_resource()   
     cursor = db["emqx_save_rules"].find({})
     async for regla in cursor:
         username = regla["username"]
