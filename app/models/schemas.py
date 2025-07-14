@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Union, Any
+from typing import Optional, Union, Any, List, Optional, Dict
 from datetime import datetime 
 
 
@@ -78,3 +78,25 @@ class AlarmRuleIn(BaseModel):
 
 class AlarmRuleOut(BaseModel):
     rule_id: str = Field(..., description="ID de la regla creada en EMQX")
+
+
+class DashboardIn(BaseModel):
+    user_id: str
+    device_id: str
+
+class DashboardOut(BaseModel):
+    url: str
+
+class PanelConfig(BaseModel):
+    type: str = Field(..., description="Tipo de panel (timeseries, stat, gauge, etc.)")
+    title: str
+    flux: str = Field(..., description="Consulta Flux completa para el panel")
+    gridPos: Optional[Dict[str, int]] = Field(
+        None,
+        description="Posición opcional en la grilla: {'h':…, 'w':…, 'x':…, 'y':…}"
+    )
+
+class DashboardConfig(BaseModel):
+    title: str = Field(..., description="Título del dashboard")
+    range: str = Field("-1h", description="Rango de tiempo de consulta (Flux range)")
+    panels: List[PanelConfig]

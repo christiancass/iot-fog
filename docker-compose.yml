@@ -16,8 +16,8 @@ services:
       - EMQX_API_BASE=http://emqx:8081/api/v4
       - EMQX_MANAGEMENT__DEFAULT_APPLICATION__USERNAME=admin
       - EMQX_MANAGEMENT__DEFAULT_APPLICATION__PASSWORD=admin123..
+      - INFLUX_ADMIN_TOKEN=${INFLUX_ADMIN_TOKEN}
       - INFLUX_URL=http://influxdb:8086
-      - INFLUX_TOKEN=admin123                             
       - INFLUX_ORG=my-org
       - INFLUX_BUCKET=measurements
 
@@ -123,28 +123,29 @@ services:
   grafana:
     image: grafana/grafana-oss
     container_name: grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=grafana123
-      - GF_AUTH_ANONYMOUS_ENABLED=false
-      - GF_AUTH_BASIC_ENABLED=true
-      - GRAFANA_TOKEN=
-      - GRAFANA_URL=${GRAFANA_URL}
-
-    networks:
-      - red-auth
+    restart: unless-stopped
     ports:
       - "3000:3000"
-    depends_on:
-      - influxdb
+    environment:
+      # credenciales de Grafana
+      - GRAFANA_ADMIN_USER=admin
+      - GRAFANA_ADMIN_PASSWORD=admin123..
+      - GRAFANA_URL=http://grafana:3000
+      # Credenciales de administrador de Grafana
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123..
+      # Deshabilitar anonimato y habilitar autenticación básica
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_BASIC_ENABLED=true
     volumes:
-      - grafana-storage:/var/lib/grafana
-
+      - grafana-data:/var/lib/grafana
+    networks:
+      - red-auth
 
 volumes:
   auth-mongo-data:
   influxdb-data:
-  grafana-storage:
+  grafana-data:
 
 networks:
   red-auth:
