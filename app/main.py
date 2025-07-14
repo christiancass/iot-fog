@@ -19,6 +19,7 @@ from app.routes.dashboard import router as grafana_router
 
 logging.basicConfig(level=logging.INFO)
 
+
 app = FastAPI()
 
 # Rutas
