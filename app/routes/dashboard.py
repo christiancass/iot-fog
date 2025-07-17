@@ -1,12 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from app.models.schemas import DashboardConfig
-from app.utils.grafana import create_dashboard_dynamic
-from pydantic import BaseModel
+from app.models.schemas import DashboardConfig, DashboardResponse
+from app.apis.grafana_api import create_dashboard_dynamic
+
 
 router = APIRouter(prefix="/grafana", tags=["Grafana"])
 
-class DashboardResponse(BaseModel):
-    url: str
+
 
 @router.post("/dashboards/custom", response_model=DashboardResponse)
 async def create_custom_dashboard(cfg: DashboardConfig):

@@ -80,23 +80,20 @@ class AlarmRuleOut(BaseModel):
     rule_id: str = Field(..., description="ID de la regla creada en EMQX")
 
 
-class DashboardIn(BaseModel):
-    user_id: str
-    device_id: str
-
-class DashboardOut(BaseModel):
-    url: str
-
 class PanelConfig(BaseModel):
-    type: str = Field(..., description="Tipo de panel (timeseries, stat, gauge, etc.)")
+    type: str
     title: str
-    flux: str = Field(..., description="Consulta Flux completa para el panel")
-    gridPos: Optional[Dict[str, int]] = Field(
-        None,
-        description="Posición opcional en la grilla: {'h':…, 'w':…, 'x':…, 'y':…}"
-    )
+    flux: str            # p.ej. "mean()" o "last()" o "limit(n:50)"
+    gridPos: Dict = None
 
 class DashboardConfig(BaseModel):
-    title: str = Field(..., description="Título del dashboard")
-    range: str = Field("-1h", description="Rango de tiempo de consulta (Flux range)")
+    title: str
+    range: str           # p.ej. "-1h", "-6h"
+    bucket: str          # p.ej. "measurements"
+    measurement: str     # "iot_data"
+    field: str = "value" # filtro de campo
+    tagFilters: Dict[str,str]  # debe contener device_id, username, variable_id
     panels: List[PanelConfig]
+
+class DashboardResponse(BaseModel):
+    url: str
