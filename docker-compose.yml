@@ -20,6 +20,8 @@ services:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_ORG=my-org
       - INFLUX_BUCKET=measurements
+      - DATASOURCE_UID=ff2o481c3aio0f
+
 
   mongo:
     image: mongo:5.0
@@ -134,9 +136,13 @@ services:
       # Credenciales de administrador de Grafana
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin123..
+      - GF_AUTH_ANONYMOUS_ORG_NAME=Main Org.
       # Deshabilitar anonimato y habilitar autenticación básica
-      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true           
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer        
       - GF_AUTH_BASIC_ENABLED=true
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+      
     volumes:
       - grafana-data:/var/lib/grafana
     networks:
