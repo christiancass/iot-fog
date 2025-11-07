@@ -1,9 +1,7 @@
-version: "3.9"
-
 services:
   api:
     build: .
-    container_name: fastapi-auth
+    container_name: fastapi
     ports:
       - "8000:8000"
     depends_on:
@@ -11,7 +9,7 @@ services:
       - emqx
       - influxdb
     networks:
-      - red-auth
+      - network_private
     environment:
       - EMQX_API_BASE=http://emqx:8081/api/v4
       - EMQX_MANAGEMENT__DEFAULT_APPLICATION__USERNAME=admin
@@ -21,6 +19,7 @@ services:
       - INFLUX_ORG=my-org
       - INFLUX_BUCKET=measurements
       - DATASOURCE_UID=ff2o481c3aio0f
+      - ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 
   mongo:
@@ -33,7 +32,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
     networks:
-      - red-auth
+      - network_private
   
   mongo-express:
     image: mongo-express
@@ -51,14 +50,14 @@ services:
     depends_on:
       - mongo
     networks:
-      - red-auth
+      - network_private
 
   emqx:
     image: emqx/emqx:4.4.18
     container_name: emqx
     restart: unless-stopped
     networks:
-      - red-auth
+      - network_private
 
     ports:
       - "1883:1883"
@@ -116,7 +115,7 @@ services:
       - DOCKER_INFLUXDB_INIT_RETENTION=7d
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=admin123
     networks:
-      - red-auth
+      - network_private
     ports:
       - "8086:8086"
     volumes:
@@ -146,7 +145,7 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
     networks:
-      - red-auth
+      - network_private
 
 volumes:
   auth-mongo-data:
@@ -154,6 +153,6 @@ volumes:
   grafana-data:
 
 networks:
-  red-auth:
+  network_private:
 
 

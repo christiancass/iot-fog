@@ -11,6 +11,13 @@ from app.routes.auth import get_current_user
 
 router = APIRouter()
 
+from fastapi import Response
+
+@router.options("/users")
+async def options_users():
+    # El CORSMiddleware añadirá los headers; esto solo evita el 405.
+    return Response(status_code=204)
+
 # Obtener solo la información del usuario autenticado
 @router.get("/users", response_model=UsuarioOut)
 async def obtener_usuario_actual(user: dict = Depends(get_current_user)):
@@ -61,7 +68,7 @@ async def crear_usuario(usuario: UsuarioIn):
         "company": usuario.company,
         "rol": usuario.rol
     }
-
+    
     await db["usuarios"].insert_one(nuevo_usuario)
     return {"Usuario creado con exito"}
 

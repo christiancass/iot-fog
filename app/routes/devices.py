@@ -149,11 +149,21 @@ async def obtener_dispositivos(user: dict = Depends(get_current_user)):
     devices_cursor = db["dispositivos"].find({"username": user["username"]})
     devices = []
     async for device in devices_cursor:
+        mqtt_username = device.get("mqtt_username")
+        mqtt_hash = None
+        if mqtt_username:
+            # busca en colección mqtt_user
+            doc = await db["mqtt_user"].find_one({"username": mqtt_username})
+            if doc and isinstance(doc.get("password"), str):
+                mqtt_hash = doc["password"]
+
         devices.append({
             "id": str(device["_id"]),
             "device_id": device.get("device_id"),
             "name": device.get("name"),
-            "username": device.get("username")
+            "username": device.get("username"),
+            "mqtt_username": mqtt_username,
+            "mqtt_password_hash": mqtt_hash,  # <- hash bcrypt (no reversible)
         })
     return devices
 
@@ -228,3 +238,62 @@ async def device_delete(device_id: str, user: dict = Depends(get_current_user)):
     logging.info(f"[delete] Dispositivo '{device_id}' eliminado")
 
     return {"message": f"Dispositivo '{device_id}' y todos sus recursos fueron eliminados correctamente"}
+
+@router.post("/devices/{device_id}/rotate-credentials")
+async def rotate_credentials(device_id: str, user: dict = Depends(get_current_user)):
+    """
+    Genera una NUEVA contraseña para el mqtt_username del dispositivo y la devuelve en claro.
+    EMQX usa emqx_auth_mongo, así que con actualizar la colección mqtt_user basta.
+    """
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Base de datos no inicializada")
+
+    # 1) Verifica que el dispositivo exista y sea del usuario
+    dispositivo = await db["dispositivos"].find_one({
+        "device_id": device_id,
+        "username": user["username"]
+    })
+    if not dispositivo:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+
+    mqtt_username = dispositivo.get("mqtt_username")
+    if not mqtt_username:
+        # si por alguna razón no existiera, lo regeneramos consistente al create
+        mqtt_username = f"dev_{device_id}"
+        await db["dispositivos"].update_one(
+            {"_id": dispositivo["_id"]},
+            {"$set": {"mqtt_username": mqtt_username}}
+        )
+
+    # 2) Genera contraseña nueva y guarda hash en mqtt_user
+    raw_password = secrets.token_urlsafe(16)
+    hashed = bcrypt.hashpw(raw_password.encode(), bcrypt.gensalt()).decode()
+
+    # upsert del usuario MQTT
+    await db["mqtt_user"].update_one(
+        {"username": mqtt_username},
+        {"$set": {"password": hashed}},
+        upsert=True,
+    )
+
+    # (Opcional) Garantiza ACL por si no existiera aún
+    await db["mqtt_acl"].update_one(
+        {"username": mqtt_username},
+        {
+            "$setOnInsert": {
+                "username": mqtt_username,
+                "pubsub": [f"iot/{user['username']}/{device_id}/+/sdata"],
+            }
+        },
+        upsert=True,
+    )
+
+    logging.info(f"[rotate] Credenciales rotadas para {mqtt_username}")
+
+    # 3) Devuelve la contraseña en claro
+    return {
+        "mqtt_username": mqtt_username,
+        "mqtt_password": raw_password,  # 👈 nombre EXACTO que espera el front
+    }
+

@@ -1,10 +1,12 @@
-
+# --- Imports principales ---
 import os
 import logging
 import asyncio
 from dotenv import load_dotenv, set_key
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware  # 👈 IMPORTANTE: añadido
+
 from app.utils.services_ready import wait_influx, wait_grafana
 from app.utils.influxdb_auth import crear_token_influx
 from app.utils.db import connect_to_mongo, close_mongo_connection
@@ -25,7 +27,22 @@ load_dotenv(".env")
 
 app = FastAPI()
 
-# Routers
+# --- 🧩 Configuración CORS ---
+# Lee los orígenes desde .env o usa valores por defecto
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,http://app.iotfog.local"
+).split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in ALLOWED_ORIGINS if o.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Routers existentes ---
 app.include_router(login_router)
 app.include_router(user_router)
 app.include_router(device_router)
@@ -37,37 +54,27 @@ app.include_router(grafana_router)
 
 @app.on_event("startup")
 async def startup_event():
-    # MongoDB
     await connect_to_mongo()
-
-    # EMQX
     await init_emqx_resources()
-
-    # Load rules
     await cargar_alarm_rules_desde_mongo()
     await cargar_save_rules_desde_mongo()
 
-    # InfluxDB ready
     influx_url = os.getenv("INFLUX_URL", "http://influxdb:8086")
     await wait_influx(influx_url)
 
-    # Create Influx token
     influx_token = await crear_token_influx()
     os.environ["INFLUX_AUTH_TOKEN"] = influx_token
     set_key(".env", "INFLUX_AUTH_TOKEN", influx_token)
     logging.info(f"[Startup] INFLUX_AUTH_TOKEN set to: {influx_token}")
 
-    # Grafana ready
     grafana_url = os.getenv("GRAFANA_URL", "http://grafana:3000")
     await wait_grafana(grafana_url)
 
-    # Create Grafana SA & token
     grafana_token = setup_grafana_api_key()
     os.environ["GRAFANA_API_KEY"] = grafana_token
     set_key(".env", "GRAFANA_API_KEY", grafana_token)
     logging.info(f"[Startup] GRAFANA_API_KEY set to: {grafana_token}")
 
-    # Ensure Grafana datasource exists
     await ensure_datasource()
 
 @app.on_event("shutdown")

@@ -55,9 +55,9 @@ class StoreFlag(BaseModel):
 class VariableIn(BaseModel):
     device_id: str
     variable_name: str
+    variable_id: str 
     unit: str
-    description:str
-    sampling_ms:str
+    sampling_ms: str
 
 class MqttMessage(BaseModel):
     topic: str
