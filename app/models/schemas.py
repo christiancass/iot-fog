@@ -97,3 +97,9 @@ class DashboardConfig(BaseModel):
 
 class DashboardResponse(BaseModel):
     url: str
+
+class DashboardListItem(BaseModel):
+  uid: str
+  title: str
+  url: str
+  fullUrl: str

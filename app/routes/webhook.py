@@ -8,6 +8,9 @@ from app.apis.influx_api import write_to_influx
 
 router = APIRouter()
 
+# ----------------------------------------------------------------------------------
+# SAVER WEBHOOK (YA LO TIENES)
+# ----------------------------------------------------------------------------------
 @router.post("/saver-webhook")
 async def saver_webhook(req: Request):
     body = await req.json()
@@ -43,13 +46,15 @@ async def saver_webhook(req: Request):
 
     logging.info(f"username: {username}, device_id: {device_id}, variable_id: {variable_id}")
 
+    ts = datetime.utcnow()
+
     saver_doc = {
         "username": username,
         "device_id": device_id,
         "variable_id": variable_id,
         "value": value,
         "topic": topic,
-        "timestamp": datetime.utcnow()
+        "timestamp": ts
     }
 
     db = get_db()
@@ -63,7 +68,7 @@ async def saver_webhook(req: Request):
     except Exception as e:
         logging.error("Error insertando dato en MongoDB: %r", e)
         raise HTTPException(status_code=500, detail="Error guardando ")
-    
+
     try:
         await write_to_influx(
             measurement="iot_data",
@@ -75,25 +80,25 @@ async def saver_webhook(req: Request):
             fields={
                 "value": value
             },
-            timestamp=datetime.utcnow()
+            timestamp=ts
         )
     except Exception as e:
         logging.error("Error escribiendo en InfluxDB: %r", e)
 
     return {}
-#----------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------
 # ALARM WEBHOOK
-#----------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
 @router.post("/alarms-webhook")
 async def alarms_webhook(req: Request):
     """
     Recibe POST de EMQX cuando una regla de alarma se dispara.
-    El body suele ser algo como:
+    Body esperado:
       {
         "value": 76.81,
         "topic": "iot/{username}/{device_id}/{variable_id}/sdata"
       }
-    Aquí extraemos device_id y variable_id del topic si no vienen en el payload.
     """
 
     body = await req.json()
@@ -106,25 +111,26 @@ async def alarms_webhook(req: Request):
         logging.error("Faltan 'value' o 'topic' en el payload de alarma: %r", body)
         raise HTTPException(status_code=400, detail="Falta value o topic")
 
-
-
+    # Extraer partes del topic
     try:
-        parts=topic.split("/")
-        username=parts[1]
-        device_id=parts[2]
-        variable_id=parts[3]
+        parts = topic.split("/")
+        username = parts[1]
+        device_id = parts[2]
+        variable_id = parts[3]
     except Exception:
         logging.error("No se pudo parsear device/variable del topic: %r", topic)
         raise HTTPException(status_code=400, detail="Formato de topic inválido")
 
+    ts = datetime.utcnow()
+
     # Construir documento de alarma
     alarm_doc = {
-        "username": username,
-        "device_id":   device_id,
+        "username":   username,
+        "device_id":  device_id,
         "variable_id": variable_id,
-        "value":       value,
-        "topic":       topic,
-        "timestamp":   datetime.utcnow()
+        "value":      value,
+        "topic":      topic,
+        "timestamp":  ts
     }
 
     # Persistir en MongoDB
@@ -139,5 +145,23 @@ async def alarms_webhook(req: Request):
     except Exception as e:
         logging.error("Error insertando alarma en MongoDB: %r", e)
         raise HTTPException(status_code=500, detail="Error guardando alarma")
+
+    # Guardar también en InfluxDB
+    try:
+        await write_to_influx(
+            measurement="iot_alarms",   # o "iot_data" si quieres unificar
+            tags={
+                "username": username,
+                "device_id": device_id,
+                "variable_id": variable_id
+            },
+            fields={
+                "value": value
+            },
+            timestamp=ts
+        )
+        logging.info("Alarma escrita en InfluxDB")
+    except Exception as e:
+        logging.error("Error escribiendo alarma en InfluxDB: %r", e)
 
     return {}
